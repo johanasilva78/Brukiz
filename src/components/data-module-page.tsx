@@ -54,7 +54,8 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
   onToast: (message: string) => void;
 }) {
   const definition = modules[section];
-  const [resource, setResource] = useState(definition?.resource ?? "contacts");
+  const [adminResource, setAdminResource] = useState("agencies");
+  const resource = section === "Administración" ? adminResource : definition?.resource ?? "contacts";
   const [records, setRecords] = useState<DataRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -231,7 +232,7 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
       <div className="page-heading module-heading">
         <div><div className="eyebrow">{currentDefinition.eyebrow}</div><h1>{currentDefinition.title}</h1><p>{currentDefinition.description}</p></div>
         <div className="contact-actions">
-          {section === "Administración" && <button className="filter-button" onClick={() => setResource(resource === "users" ? "agencies" : "users")}>{resource === "users" ? "Usuarios" : "Agencia"}</button>}
+          {section === "Administración" && <button className="filter-button" onClick={() => setAdminResource(resource === "users" ? "agencies" : "users")}>{resource === "users" ? "Usuarios" : "Agencia"}</button>}
           <button className="primary-button" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus size={17} /> Nuevo registro</button>
         </div>
       </div>
