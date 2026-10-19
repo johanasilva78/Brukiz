@@ -250,6 +250,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .modal-close:hover { background: #f2f5f9; }
 .contact-modal > label, .modal-two-col label { display: flex; flex-direction: column; gap: 6px; margin: 13px 0; color: #53627a; font-size: 10px; font-weight: 600; }
 .contact-modal input, .contact-modal select { height: 37px; width: 100%; padding: 0 10px; border: 1px solid #dfe5ee; border-radius: 5px; background: #fff; color: #34435a; font-size: 11px; }
+.contact-modal textarea { width: 100%; padding: 9px 10px; border: 1px solid #dfe5ee; border-radius: 5px; background: #fff; color: #34435a; font: inherit; font-size: 11px; resize: vertical; }
+.record-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.record-form-grid label { min-width: 0; display: flex; flex-direction: column; gap: 6px; margin: 8px 0; color: #53627a; font-size: 10px; font-weight: 600; }
+.record-form-grid label:has(textarea) { grid-column: 1 / -1; }
+.form-error { padding: 10px 15px; }
+.contacts-table .contact-actions { gap: 4px; }
 .contact-modal input::placeholder { color: #a4adbb; }
 .modal-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .modal-notice { display: flex; align-items: flex-start; gap: 8px; margin: 17px 0; padding: 10px; border: 1px solid #e5edf9; border-radius: 6px; background: #f7faff; color: #7184a2; font-size: 9px; line-height: 1.5; }
@@ -346,6 +352,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .table-settings { flex: 0 0 auto; }
   .contacts-table { min-width: 710px; }
   .table-footer { padding: 0 10px; font-size: 8px; }
+  .record-form-grid { grid-template-columns: 1fr; }
+  .record-form-grid label:has(textarea) { grid-column: auto; }
   .pagination { gap: 0; }
   .pagination button { width: 22px; height: 23px; }
   .modal-two-col { grid-template-columns: 1fr; gap: 0; }

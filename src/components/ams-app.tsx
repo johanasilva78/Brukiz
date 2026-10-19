@@ -32,7 +32,9 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { DataModulePage } from "./data-module-page";
+import { modules } from "@/lib/ams-modules";
 
 type Contact = {
   id: string;
@@ -60,7 +62,7 @@ const menuGroups = [
     title: "GENERAL",
     links: [
       { id: "Inicio", icon: Home },
-      { id: "Contactos", icon: UsersRound, count: "248" },
+      { id: "Contactos", icon: UsersRound },
       { id: "Oportunidades", icon: BriefcaseBusiness },
       { id: "Cotizaciones", icon: ClipboardList },
     ],
@@ -69,7 +71,7 @@ const menuGroups = [
     title: "OPERACIONES",
     links: [
       { id: "Pólizas", icon: Shield },
-      { id: "Renovaciones", icon: CalendarDays, count: "8" },
+      { id: "Renovaciones", icon: CalendarDays },
       { id: "Siniestros", icon: LifeBuoy },
       { id: "Aseguradoras", icon: BuildingIcon },
       { id: "Productos", icon: FileText },
@@ -78,7 +80,7 @@ const menuGroups = [
   {
     title: "GESTIÓN",
     links: [
-      { id: "Tareas", icon: Check, count: "5" },
+      { id: "Tareas", icon: Check },
       { id: "Documentos", icon: FileText },
       { id: "Reportes", icon: Activity },
     ],
@@ -166,24 +168,12 @@ export function AmsApp() {
   const [active, setActive] = useState("Inicio");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [search, setSearch] = useState("");
-  const [contacts, setContacts] = useState(initialContacts);
-  const [modalOpen, setModalOpen] = useState(false);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
     const savedSession = window.localStorage.getItem("brukiz-demo-session");
-    const savedContacts = window.localStorage.getItem("brukiz-demo-contacts");
     if (savedSession) {
       setLoggedIn(true);
-    }
-    if (savedContacts) {
-      try {
-        const parsed = JSON.parse(savedContacts);
-        if (Array.isArray(parsed)) setContacts(parsed as Contact[]);
-      } catch {
-        window.localStorage.removeItem("brukiz-demo-contacts");
-        setToast("No se pudieron recuperar los contactos de demostración guardados.");
-      }
     }
   }, []);
 
@@ -204,30 +194,7 @@ export function AmsApp() {
     window.localStorage.removeItem("brukiz-demo-session");
   }
 
-  function addContact(contact: Omit<Contact, "id" | "initials" | "color">) {
-    const next: Contact = {
-      ...contact,
-      id: `C-${1001 + contacts.length}`,
-      initials: contact.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
-      color: ["blue", "violet", "green", "amber", "rose"][contacts.length % 5],
-    };
-    const updated = [next, ...contacts];
-    setContacts(updated);
-    window.localStorage.setItem("brukiz-demo-contacts", JSON.stringify(updated));
-    setModalOpen(false);
-    setToast("Contacto agregado al espacio demostrativo.");
-  }
-
-  const filteredContacts = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return contacts;
-    return contacts.filter((contact) => `${contact.name} ${contact.email} ${contact.phone} ${contact.type}`.toLowerCase().includes(term));
-  }, [contacts, search]);
-
   if (!loggedIn) return <LoginScreen onLogin={logIn} />;
-
-  const isContacts = active === "Contactos";
-  const detail = sectionDetails[active];
 
   return (
     <div className="app-shell">
@@ -242,11 +209,14 @@ export function AmsApp() {
           {menuGroups.map((group) => (
             <div className="nav-group" key={group.title}>
               <p className="nav-heading">{group.title}</p>
-              {group.links.map(({ id, icon: Icon, count }) => (
-                <button key={id} className={`nav-link ${active === id ? "nav-link-active" : ""}`} onClick={() => { setActive(id); setMobileMenu(false); }}>
-                  <Icon size={18} strokeWidth={1.8} /><span>{id}</span>{count && <span className="nav-count">{count}</span>}
+              {group.links.map((link) => {
+                const Icon = link.icon;
+                return (
+                <button key={link.id} className={`nav-link ${active === link.id ? "nav-link-active" : ""}`} onClick={() => { setActive(link.id); setMobileMenu(false); }}>
+                  <Icon size={18} strokeWidth={1.8} /><span>{link.id}</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           ))}
         </nav>
@@ -273,76 +243,77 @@ export function AmsApp() {
           <div className="demo-banner"><span className="demo-banner-dot" /><strong>ENTORNO DEMOSTRATIVO</strong><span>Datos de ejemplo; no representan operaciones reales.</span></div>
           {active === "Inicio" ? (
             <Dashboard onNavigate={setActive} />
-          ) : isContacts ? (
-            <ContactsPage contacts={filteredContacts} search={search} setSearch={setSearch} onAdd={() => setModalOpen(true)} />
           ) : (
-            <ModulePreview section={detail ?? { eyebrow: "ADMINISTRACIÓN", title: active, description: "Administra la información de tu agencia en un solo lugar." }} onAdd={() => setToast(`La gestión de ${active.toLowerCase()} estará disponible en el siguiente incremento.`)} />
+            <DataModulePage section={active} search={search} setSearch={setSearch} onToast={setToast} />
           )}
         </div>
       </main>
-      {modalOpen && <ContactModal onClose={() => setModalOpen(false)} onSave={addContact} />}
       {toast && <div className="toast" role="status"><Check size={17} />{toast}</div>}
     </div>
   );
 }
 
 function Dashboard({ onNavigate }: { onNavigate: (section: string) => void }) {
-  const [period, setPeriod] = useState("Últimos 30 días");
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [summaryError, setSummaryError] = useState("");
+
+  useEffect(() => {
+    async function loadSummary() {
+      try {
+        const apiBaseUrl = process.env.NEXT_PUBLIC_BRUKIZ_API_URL?.replace(/\/+$/, "");
+        if (apiBaseUrl) {
+          const response = await fetch(`${apiBaseUrl}/v1/reports`);
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.message ?? `La API respondió ${response.status}.`);
+          setCounts(result.counts as Record<string, number>);
+          return;
+        }
+        const next: Record<string, number> = {};
+        for (const module of Object.values(modules)) {
+          const stored = window.localStorage.getItem(`brukiz-demo-data:${module.resource}`);
+          const rows: unknown = stored ? JSON.parse(stored) : module.resource === "contacts" ? Array(4).fill(null) : [];
+          if (!Array.isArray(rows)) throw new Error(`Los datos locales de ${module.resource} no tienen un formato válido.`);
+          next[module.resource] = rows.filter((row) => !row || typeof row !== "object" || !(row as { archived?: boolean }).archived).length;
+        }
+        const users = window.localStorage.getItem("brukiz-demo-data:users");
+        const userRows: unknown = users ? JSON.parse(users) : [];
+        if (!Array.isArray(userRows)) throw new Error("Los datos locales de usuarios no tienen un formato válido.");
+        next.users = userRows.filter((row) => !row || typeof row !== "object" || !(row as { archived?: boolean }).archived).length;
+        setCounts(next);
+      } catch (cause) {
+        setSummaryError(cause instanceof Error ? cause.message : "No se pudo cargar el resumen de la agencia.");
+      }
+    }
+    void loadSummary();
+  }, []);
+
   return (
     <>
       <div className="page-heading dashboard-heading">
-        <div><div className="eyebrow">LUNES, 19 DE OCTUBRE DE 2026</div><h1>Buenos días, Andrea <span className="wave">✦</span></h1><p>Este es el resumen de tu agencia y lo que requiere tu atención.</p></div>
+        <div><div className="eyebrow">RESUMEN DE OPERACIONES</div><h1>Buenos días, Andrea <span className="wave">✦</span></h1><p>Registros y pendientes de tu agencia en un solo lugar.</p></div>
         <button className="primary-button" onClick={() => onNavigate("Contactos")}><Plus size={17} /> Nuevo contacto</button>
       </div>
       <div className="summary-row">
-        <div className="summary-copy"><strong>Resumen de la agencia</strong><span>Un vistazo a tu actividad comercial.</span></div>
-        <button className="period-select" onClick={() => setPeriod(period === "Últimos 30 días" ? "Este mes" : "Últimos 30 días")}><CalendarDays size={16} />{period}<ChevronDown size={15} /></button>
+        <div className="summary-copy"><strong>Resumen de la agencia</strong><span>Conteos actuales de los registros activos.</span></div>
       </div>
+      {summaryError && <p className="form-error" role="alert">{summaryError}</p>}
       <section className="metrics-grid" aria-label="Indicadores de la agencia">
-        <MetricCard label="Primas emitidas" amount={formatMoney(1284500)} delta="+12.8%" icon={<HandCoins size={18} />} tone="blue" note="vs. período anterior" />
-        <MetricCard label="Pólizas activas" amount="184" delta="+8.2%" icon={<ShieldCheck size={18} />} tone="green" note="vs. período anterior" />
-        <MetricCard label="Oportunidades" amount="32" delta="+4.5%" icon={<BriefcaseBusiness size={18} />} tone="violet" note="vs. período anterior" />
-        <MetricCard label="Renovaciones próximas" amount="8" delta="Próx. 30 días" icon={<CalendarDays size={18} />} tone="amber" note="Requieren seguimiento" />
+        <MetricCard label="Contactos" amount={String(counts.contacts ?? "—")} delta="Registros" icon={<UsersRound size={18} />} tone="blue" note="En el directorio" />
+        <MetricCard label="Pólizas" amount={String(counts.policies ?? "—")} delta="Registros" icon={<ShieldCheck size={18} />} tone="green" note="En cartera" />
+        <MetricCard label="Oportunidades" amount={String(counts.opportunities ?? "—")} delta="Registros" icon={<BriefcaseBusiness size={18} />} tone="violet" note="En pipeline" />
+        <MetricCard label="Tareas pendientes" amount={String(counts.tasks ?? "—")} delta="Registros" icon={<Check size={18} />} tone="amber" note="Revisa sus estados" />
       </section>
       <div className="dashboard-grid">
-        <section className="panel performance-panel">
-          <div className="panel-header"><div><h2>Rendimiento comercial</h2><p>Primas emitidas durante el período</p></div><button className="more-button" aria-label="Más opciones"><MoreHorizontal size={20} /></button></div>
-          <div className="chart-total"><strong>{formatMoney(1284500)}</strong><span className="positive-tag"><ArrowUpRight size={14} /> 12.8%</span></div>
-          <RevenueChart />
-          <div className="chart-legend"><span><i className="legend-dot" />Primas emitidas</span><span>HNL</span></div>
-        </section>
-        <section className="panel renewal-panel">
-          <div className="panel-header"><div><h2>Próximas renovaciones</h2><p>Requieren seguimiento cercano</p></div><button className="text-link" onClick={() => onNavigate("Renovaciones")}>Ver todas <ArrowRight size={14} /></button></div>
-          <div className="renewal-list">
-            <RenewalItem initials="ML" name="María Fernanda López" product="Seguro de automóvil" date="Vence en 3 días" tone="blue" />
-            <RenewalItem initials="IV" name="Inversiones del Valle" product="Seguro empresarial" date="Vence en 8 días" tone="green" />
-            <RenewalItem initials="JR" name="José Ramón Pineda" product="Seguro de vida" date="Vence en 12 días" tone="violet" />
-            <RenewalItem initials="GH" name="Grupo Horizonte S.A." product="Seguro de salud" date="Vence en 18 días" tone="amber" />
-          </div>
-          <button className="view-all-button" onClick={() => onNavigate("Renovaciones")}>Ir a renovaciones <ArrowRight size={15} /></button>
-        </section>
-      </div>
-      <div className="dashboard-grid lower-grid">
         <section className="panel task-panel">
-          <div className="panel-header"><div><h2>Mis tareas</h2><p>Lo que tienes pendiente para hoy</p></div><button className="text-link" onClick={() => onNavigate("Tareas")}>Ver tareas <ArrowRight size={14} /></button></div>
-          <div className="task-list">
-            <TaskItem title="Enviar propuesta de renovación" subtitle="María Fernanda López · Auto" time="Hoy, 10:30 a. m." priority="Alta" />
-            <TaskItem title="Dar seguimiento a cotización" subtitle="Carlos Eduardo Mejía · Vida" time="Hoy, 2:00 p. m." priority="Media" />
-            <TaskItem title="Solicitar documentos pendientes" subtitle="Inversiones del Valle · Empresarial" time="Hoy, 4:00 p. m." priority="Media" />
-          </div>
+          <div className="panel-header"><div><h2>Renovaciones</h2><p>Registros para seguimiento</p></div><button className="text-link" onClick={() => onNavigate("Renovaciones")}>Ver renovaciones <ArrowRight size={14} /></button></div>
+          <div className="pipeline-total"><strong>{counts.renewals ?? "—"}</strong><span>renovaciones registradas</span></div>
         </section>
         <section className="panel pipeline-panel">
-          <div className="panel-header"><div><h2>Pipeline comercial</h2><p>Oportunidades por etapa</p></div><button className="text-link" onClick={() => onNavigate("Oportunidades")}>Ver pipeline <ArrowRight size={14} /></button></div>
-          <div className="pipeline-total"><strong>32</strong><span>oportunidades activas</span><span className="pipeline-volume">{formatMoney(2468000)}</span></div>
-          <div className="pipeline-stages">
-            <PipelineStage name="Prospecto" count={8} percent={81} color="blue" />
-            <PipelineStage name="Cotización" count={12} percent={65} color="violet" />
-            <PipelineStage name="Negociación" count={7} percent={46} color="amber" />
-            <PipelineStage name="Cierre" count={5} percent={29} color="green" />
-          </div>
+          <div className="panel-header"><div><h2>Siniestros</h2><p>Casos registrados</p></div><button className="text-link" onClick={() => onNavigate("Siniestros")}>Ver siniestros <ArrowRight size={14} /></button></div>
+          <div className="pipeline-total"><strong>{counts.claims ?? "—"}</strong><span>siniestros registrados</span></div>
         </section>
       </div>
-      <p className="dashboard-footnote"><CircleHelp size={14} /> Las cifras y registros de este tablero son demostrativos.</p>
+      <p className="dashboard-footnote"><CircleHelp size={14} /> Los conteos reflejan registros activos; las primas, comisiones y métricas financieras no están calculadas.</p>
     </>
   );
 }

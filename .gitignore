@@ -1,7 +1,10 @@
 node_modules/
 .next/
 out/
+dist/
 coverage/
+__pycache__/
+*.py[cod]
 amplify_outputs.json
 .amplify/
 .env*
