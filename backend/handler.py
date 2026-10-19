@@ -236,7 +236,19 @@ def _audit(tenant_id: str, actor_id: str, action: str, entity_type: str, entity_
 
 
 def _transact(table, writes: list[dict[str, Any]]) -> None:
-    table.meta.client.transact_write_items(TransactItems=writes)
+    import boto3
+
+    try:
+        boto3.client("dynamodb").transact_write_items(TransactItems=writes)
+    except Exception as exc:
+        error = getattr(exc, "response", {}).get("Error", {})
+        reasons = getattr(exc, "response", {}).get("CancellationReasons", [])
+        if error.get("Code") == "TransactionCanceledException":
+            logger.error(
+                "DynamoDB transaction canceled: %s",
+                [{"code": reason.get("Code"), "message": reason.get("Message")} for reason in reasons],
+            )
+        raise
 
 
 def _dynamo_item(item: dict[str, Any]) -> dict[str, Any]:

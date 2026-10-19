@@ -13,7 +13,7 @@ class FakeTable:
     name = "Contacts"
 
     def __init__(self):
-        self.meta = types.SimpleNamespace(client=types.SimpleNamespace(transact_write_items=self.transact_write_items))
+        self.meta = types.SimpleNamespace(client=types.SimpleNamespace())
         self.transactions = []
         self.items = {}
 
@@ -48,6 +48,7 @@ class LambdaHandlerTests(unittest.TestCase):
         self.table = FakeTable()
         self.boto3 = types.ModuleType("boto3")
         self.boto3.resource = lambda name: types.SimpleNamespace(Table=lambda table_name: self.table)
+        self.boto3.client = lambda name: types.SimpleNamespace(transact_write_items=self.table.transact_write_items)
         self.conditions = types.ModuleType("boto3.dynamodb.conditions")
         self.conditions.Key = lambda name: FakeKey(name)
         dynamodb = types.ModuleType("boto3.dynamodb")
