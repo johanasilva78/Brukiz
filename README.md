@@ -65,7 +65,7 @@ Los flujos de emisión, cancelación, pagos y modificaciones sensibles serán co
 
 ## Estado actual
 
-La interfaz visual y el flujo de contactos del navegador son una demostración local etiquetada: los ejemplos y cambios locales no son datos operativos y todavía no se persisten en DynamoDB. El backend Amplify sí define Cognito, DynamoDB y una API REST NestJS con tenant derivado del token y CRUD inicial de contactos. Falta conectar la interfaz a ese API y completar los módulos del MVP, la política de agencia compartida y la verificación de producción.
+La rama de producción publica por ahora únicamente la interfaz estática y el flujo de contactos de demostración. Sus datos de ejemplo y cambios del navegador no son datos operativos y no se persisten en DynamoDB. El proyecto define Cognito, una tabla DynamoDB y un API REST NestJS inicial, pero esos recursos todavía no se han desplegado: el rol de compilación actual de Amplify necesita permiso para leer el parámetro de bootstrap de CDK en AWS Systems Manager. Una vez concedido, se puede reactivar el despliegue del backend; después se conectará la interfaz a ese API y se completarán los demás módulos del MVP.
 
 ## Ejecución local
 
@@ -74,4 +74,4 @@ npm install
 npm run dev
 ```
 
-La interfaz inicia en modo demostrativo. Para desplegar infraestructura se requiere una cuenta/perfil AWS y ejecutar `npm run sandbox`. Amplify Hosting despliega el backend y Next.js en cada rama conectada.
+La interfaz inicia en modo demostrativo. El despliegue actual de Amplify publica únicamente el frontend estático; la infraestructura AWS se desplegará después de configurar los permisos requeridos para el backend.
