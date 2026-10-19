@@ -8,8 +8,8 @@ import {
   RestApi,
 } from "aws-cdk-lib/aws-apigateway";
 import { AttributeType, BillingMode, Table, TableEncryption } from "aws-cdk-lib/aws-dynamodb";
-import { auth } from "./auth/resource";
-import { api } from "./functions/api/resource";
+import { auth } from "./auth/resource.ts";
+import { api } from "./functions/api/resource.ts";
 
 const backend = defineBackend({
   auth,
