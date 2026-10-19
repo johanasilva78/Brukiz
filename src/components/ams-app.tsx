@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  Bot,
   BriefcaseBusiness,
   CalendarDays,
   Check,
@@ -34,6 +35,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { DataModulePage } from "./data-module-page";
+import { AiAssistant } from "./ai-assistant";
 import { modules } from "@/lib/ams-modules";
 
 type Contact = {
@@ -83,6 +85,12 @@ const menuGroups = [
       { id: "Tareas", icon: Check },
       { id: "Documentos", icon: FileText },
       { id: "Reportes", icon: Activity },
+    ],
+  },
+  {
+    title: "INTELIGENCIA",
+    links: [
+      { id: "Asistente IA", icon: Bot },
     ],
   },
 ];
@@ -243,6 +251,8 @@ export function AmsApp() {
           <div className="demo-banner"><span className="demo-banner-dot" /><strong>ENTORNO DEMOSTRATIVO</strong><span>Datos de ejemplo; no representan operaciones reales.</span></div>
           {active === "Inicio" ? (
             <Dashboard onNavigate={setActive} />
+          ) : active === "Asistente IA" ? (
+            <AiAssistant onToast={setToast} />
           ) : (
             <DataModulePage section={active} search={search} setSearch={setSearch} onToast={setToast} />
           )}

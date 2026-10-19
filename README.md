@@ -13,7 +13,7 @@ Sistema de gestión de agencias de seguros para Ficohsa Seguros. El repositorio 
 - **Persistencia:** Amazon DynamoDB mediante `boto3`, el SDK oficial de AWS para Python. DynamoDB no es compatible con Prisma ni requiere un ORM relacional.
 - **Aislamiento:** tabla con clave compuesta `tenantId` (partition key) + `entityKey` (sort key). El backend obtiene el tenant exclusivamente del claim verificado `custom:tenantId` del token Cognito; nunca acepta el tenant enviado por el cliente.
 - **Documentos:** el MVP registra metadatos en DynamoDB; el almacenamiento de archivos en Amazon S3 queda para un incremento posterior.
-- **Integraciones e IA:** adaptadores independientes para REST/MCP de aseguradoras y orquestación agnóstica de proveedor LLM. No se simula que una operación real de aseguradora haya sido completada.
+- **IA:** asistente de lenguaje natural con Amazon Bedrock Nova Micro y herramientas limitadas para consultar, crear y actualizar registros de AMS. Integraciones REST/MCP con aseguradoras quedan para una fase posterior; no se simula que una operación real de aseguradora haya sido completada.
 
 ### Modelo de datos inicial
 
@@ -30,7 +30,7 @@ amplify.yml              Pipeline de Amplify Hosting
 
 ### Menú principal
 
-Inicio; Contactos; Oportunidades; Cotizaciones; Pólizas; Renovaciones; Siniestros; Aseguradoras; Productos; Tareas; Documentos; Reportes; Administración.
+Inicio; Asistente IA; Contactos; Oportunidades; Cotizaciones; Pólizas; Renovaciones; Siniestros; Aseguradoras; Productos; Tareas; Documentos; Reportes; Administración.
 
 ### Pantallas MVP
 
@@ -40,6 +40,7 @@ Inicio de sesión; dashboard; directorio y formulario de contactos; pipeline; so
 
 - Cada recurso (`contacts`, `insurers`, `products`, `opportunities`, `quotes`, `policies`, `renewals`, `claims`, `tasks`, `documents`, `agencies`, `users`) tiene `GET` para listar, `POST` para crear, `GET /{id}` para consultar, `PATCH /{id}` para actualizar y `DELETE /{id}` para archivar con auditoría.
 - `GET /v1/reports` — conteos activos por recurso; no calcula primas ni métricas financieras.
+- `POST /v1/assistant` — asistente Bedrock con herramientas de consulta, creación y actualización validadas por el backend. No archiva registros ni llama APIs externas.
 - `GET /v1/docs` — descriptor JSON básico de rutas.
 
 Los flujos de emisión, cancelación, pagos y modificaciones sensibles serán comandos separados que requieran confirmación explícita.
@@ -92,15 +93,16 @@ El comando genera `dist/brukiz-contacts-lambda.zip`, con `handler.py` en la raí
 - Variable `TABLE_NAME`: nombre exacto de la tabla DynamoDB.
 - Variable `TENANT_CLAIM`: `custom:tenantId`.
 - Variable `DEMO_MODE`: `true` solo para API temporal con datos ficticios; omítela o usa `false` para exigir claims Cognito.
-- Timeout sugerido: **10 segundos**. Mantén la memoria en **128 MB** para esta demo.
+- Variable `BEDROCK_MODEL_ID`: `amazon.nova-micro-v1:0`.
+- Timeout sugerido: **20 segundos** para permitir la inferencia de Bedrock. Mantén la memoria en **128 MB** para esta demo.
 
 ### Recursos y permisos
 
 1. En DynamoDB crea una tabla con partition key `tenantId` (String) y sort key `entityKey` (String). Se recomienda facturación bajo demanda, cifrado administrado por AWS y recuperación a un punto en el tiempo.
 2. En Cognito crea un User Pool con inicio de sesión por correo y un atributo personalizado `tenantId`. Cada usuario debe tener asignado el tenant correcto antes de autenticarse; el token debe incluir el claim `custom:tenantId`.
-3. Asigna a la función un rol de ejecución con permisos de escritura de logs y `dynamodb:Query`, `GetItem`, `PutItem`, `UpdateItem` y `TransactWriteItems`, restringidos al ARN de la tabla creada.
+3. Asigna a la función un rol de ejecución con permisos de escritura de logs y `dynamodb:Query`, `GetItem`, `PutItem`, `UpdateItem` y `TransactWriteItems`, restringidos al ARN de la tabla creada. Para el asistente agrega `bedrock:InvokeModel` restringido a `arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0`.
 4. Para la demo sin login real, crea una API **HTTP** (más económica que una API REST) en API Gateway, con integración Lambda proxy formato **1.0**, rutas `ANY /{proxy+}` y `ANY /`, y un stage como `demo` con despliegue automático. Deja la autorización en **NONE** solo en este entorno temporal, limita el throttling (por ejemplo, 2 solicitudes por segundo y burst 5), y habilita CORS solo para el origen de la rama de Amplify (por ejemplo, `https://main.<app-id>.amplifyapp.com`) y los métodos `GET`, `POST`, `PATCH`, `DELETE` y `OPTIONS`. Configura `CORS_ORIGIN` en Lambda con ese origen exacto y `DEMO_MODE=true`. Para salir de demo, desactiva `DEMO_MODE`, configura Cognito User Pool como autorizador en las rutas y conserva `OPTIONS` sin autorización.
-5. La API expone las rutas bajo `/v1` (por ejemplo, `GET /v1/contacts` y `POST /v1/contacts`). En modo autenticado, las solicitudes deben incluir el token Cognito en `Authorization`; en modo demo no se requiere token. El runtime Python de Lambda incluye `boto3`; no necesitas cargar librerías adicionales en el ZIP.
+5. La API expone las rutas bajo `/v1` (por ejemplo, `GET /v1/contacts` y `POST /v1/contacts`). En modo autenticado, las solicitudes deben incluir el token Cognito en `Authorization`; en modo demo no se requiere token. `POST /v1/assistant` usa Bedrock para responder, consultar resúmenes/listados o proponer una creación/actualización. En modo de confirmación (predeterminado), revisa y confirma la acción antes de guardarla; el modo automático solo ejecuta el cambio que el usuario pidió explícitamente. El runtime Python de Lambda incluye `boto3`; no necesitas cargar librerías adicionales en el ZIP.
 6. Para conectar el frontend servido por Amplify, agrega `NEXT_PUBLIC_BRUKIZ_API_URL` a las variables de entorno de Amplify con la URL base del stage, por ejemplo `https://<api-id>.execute-api.us-east-1.amazonaws.com/demo` (incluye el stage y no agregues `/v1`). Vuelve a desplegar Amplify: Next.js incorpora esta variable durante la compilación estática. La API pública con `DEMO_MODE=true` usa un único tenant fijo para todos los visitantes.
 
 ### Pruebas locales
@@ -112,3 +114,5 @@ npm test
 Con `DEMO_MODE=true`, todas las solicitudes públicas se guardan bajo el tenant fijo `demo` y el actor `demo-user`; el cliente nunca puede elegir otro tenant. Es un modo temporal y público, por lo que solo admite datos ficticios: no ingreses datos personales, clientes, pólizas ni secretos. El throttling reduce abuso accidental, pero no sustituye autenticación. Antes de usar información real, desactiva `DEMO_MODE` y protege la API con Cognito.
 
 El MVP gestiona registros y sus estados básicos, no reemplaza la validación operativa de una aseguradora ni emite, cancela o paga pólizas/siniestros. Los metadatos de documentos no incluyen carga/descarga de archivos. La administración de usuarios es un catálogo de demostración y no crea cuentas Cognito.
+
+El asistente es una primera integración de Bedrock con los datos del AMS; no usa servidores MCP ni invoca APIs de aseguradoras todavía. Cada solicitud consume inferencia de Bedrock. Se limita el contexto a seis mensajes de hasta 1000 caracteres y la respuesta a 400 tokens para controlar costos. No introduzcas información personal, pólizas reales, credenciales ni secretos en la demo pública.

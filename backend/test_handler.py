@@ -46,9 +46,10 @@ class FakeTable:
 class LambdaHandlerTests(unittest.TestCase):
     def setUp(self):
         self.table = FakeTable()
+        self.model_response = {"output": {"message": {"content": [{"text": "¿En qué te ayudo?"}]}}}
         self.boto3 = types.ModuleType("boto3")
         self.boto3.resource = lambda name: types.SimpleNamespace(Table=lambda table_name: self.table)
-        self.boto3.client = lambda name: types.SimpleNamespace(transact_write_items=self.table.transact_write_items)
+        self.boto3.client = self.client
         self.conditions = types.ModuleType("boto3.dynamodb.conditions")
         self.conditions.Key = lambda name: FakeKey(name)
         dynamodb = types.ModuleType("boto3.dynamodb")
@@ -85,6 +86,21 @@ class LambdaHandlerTests(unittest.TestCase):
                 "authorizer": {"claims": claims or {}},
             },
         }
+
+    def client(self, name):
+        if name == "dynamodb":
+            return types.SimpleNamespace(transact_write_items=self.table.transact_write_items)
+        if name == "bedrock-runtime":
+            return types.SimpleNamespace(converse=lambda **kwargs: self.model_response)
+        raise AssertionError(f"Unexpected boto3 client: {name}")
+
+    def assistant_event(self, message, mode="confirm"):
+        return self.event(
+            method="POST",
+            path="/prod/v1/assistant",
+            claims={"sub": "user-7", "custom:tenantId": "agency-42"},
+            body={"messages": [{"role": "user", "content": message}], "mode": mode},
+        )
 
     def test_rejects_missing_tenant_claim(self):
         result = lambda_handler(self.event(), None)
@@ -128,6 +144,90 @@ class LambdaHandlerTests(unittest.TestCase):
         audit = self.table.transactions[0][1]["Put"]["Item"]
         self.assertEqual(audit["tenantId"]["S"], "agency-42")
         self.assertEqual(audit["actorId"]["S"], "user-7")
+
+    def test_assistant_returns_text_from_bedrock(self):
+        result = lambda_handler(self.assistant_event("Hola"), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(json.loads(result["body"])["reply"], "¿En qué te ayudo?")
+
+    def test_assistant_prepares_create_for_confirmation_without_writing(self):
+        self.model_response = {"output": {"message": {"content": [{
+            "toolUse": {
+                "name": "create_record",
+                "input": {"entity": "contacts", "data": {"name": "Contacto ficticio", "type": "prospecto"}},
+            }
+        }]}}}
+        result = lambda_handler(self.assistant_event("Prepara un prospecto ficticio"), None)
+        body = json.loads(result["body"])
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(body["action"]["resource"], "contacts")
+        self.assertEqual(body["action"]["data"]["name"], "Contacto ficticio")
+        self.assertEqual(self.table.transactions, [])
+
+    def test_assistant_executes_explicit_auto_create_and_audits(self):
+        self.model_response = {"output": {"message": {"content": [{
+            "toolUse": {
+                "name": "create_record",
+                "input": {"entity": "contacts", "data": {"name": "Contacto ficticio", "type": "prospecto"}},
+            }
+        }]}}}
+        result = lambda_handler(self.assistant_event("Crea el prospecto ficticio", mode="auto"), None)
+        body = json.loads(result["body"])
+        self.assertEqual(result["statusCode"], 200)
+        self.assertTrue(body["saved"])
+        self.assertEqual(len(self.table.transactions), 1)
+
+    def test_assistant_lists_records_without_sending_record_details_to_bedrock(self):
+        lambda_handler(self.event(
+            method="POST",
+            claims={"sub": "user-7", "custom:tenantId": "agency-42"},
+            body={"name": "Contacto ficticio", "type": "prospecto"},
+        ), None)
+        self.model_response = {"output": {"message": {"content": [{
+            "toolUse": {"name": "list_records", "input": {"entity": "contacts"}}
+        }]}}}
+        result = lambda_handler(self.assistant_event("Lista mis contactos"), None)
+        body = json.loads(result["body"])
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(body["records"][0]["name"], "Contacto ficticio")
+        self.assertEqual(body["records"][0]["id"], self.table.transactions[0][0]["Put"]["Item"]["entityKey"]["S"].split("#")[1])
+
+    def test_assistant_proposes_update_only_for_existing_record(self):
+        created = lambda_handler(self.event(
+            method="POST",
+            claims={"sub": "user-7", "custom:tenantId": "agency-42"},
+            body={"name": "Contacto ficticio", "type": "prospecto"},
+        ), None)
+        contact_id = json.loads(created["body"])["id"]
+        self.model_response = {"output": {"message": {"content": [{
+            "toolUse": {
+                "name": "update_record",
+                "input": {"entity": "contacts", "id": contact_id, "data": {"name": "Contacto actualizado"}},
+            }
+        }]}}}
+        result = lambda_handler(self.assistant_event("Cambia el nombre del contacto"), None)
+        body = json.loads(result["body"])
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(body["action"]["kind"], "update")
+        self.assertEqual(body["action"]["id"], contact_id)
+        self.assertEqual(len(self.table.transactions), 1)
+
+    def test_assistant_rejects_empty_bedrock_response(self):
+        self.model_response = {"output": {"message": {"content": []}}}
+        result = lambda_handler(self.assistant_event("Hola"), None)
+        self.assertEqual(result["statusCode"], 502)
+        self.assertEqual(json.loads(result["body"])["error"], "Bad Gateway")
+
+    def test_assistant_validates_tool_data_before_proposing_action(self):
+        self.model_response = {"output": {"message": {"content": [{
+            "toolUse": {
+                "name": "create_record",
+                "input": {"entity": "products", "data": {"name": "Producto sin categoría"}},
+            }
+        }]}}}
+        result = lambda_handler(self.assistant_event("Crea un producto"), None)
+        self.assertEqual(result["statusCode"], 400)
+        self.assertEqual(self.table.transactions, [])
 
     def test_rejects_unknown_fields(self):
         result = lambda_handler(self.event(
