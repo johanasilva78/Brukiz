@@ -180,11 +180,17 @@ export function AmsApp() {
   const [toast, setToast] = useState("");
   const [agency, setAgency] = useState<DemoAgencyId>("demo");
   const agencyName = demoAgencies.find((item) => item.id === agency)!.name;
+  const nameParts = email.split("@")[0].split(/[._+\-]+/).filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase("es") + part.slice(1).toLocaleLowerCase("es"));
+  const displayName = nameParts.join(" ") || "Agente";
+  const firstName = nameParts[0] || "Agente";
+  const initials = nameParts.slice(0, 2).map((part) => part.charAt(0)).join("") || "A";
 
   useEffect(() => {
     setAgency(getDemoAgency());
     const savedSession = window.localStorage.getItem("brukiz-demo-session");
     if (savedSession) {
+      setEmail(savedSession);
       setLoggedIn(true);
     }
   }, []);
@@ -197,8 +203,10 @@ export function AmsApp() {
   }, [toast]);
 
   function logIn(nextEmail: string) {
+    setEmail(nextEmail.trim());
+    setActive("Inicio");
     setLoggedIn(true);
-    window.localStorage.setItem("brukiz-demo-session", nextEmail);
+    window.localStorage.setItem("brukiz-demo-session", nextEmail.trim());
   }
 
   function logOut() {
@@ -242,7 +250,7 @@ export function AmsApp() {
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>¿Necesitas ayuda?</strong><p>Estamos para apoyarte.</p><button onClick={() => setToast("Centro de ayuda disponible próximamente.")}>Contactar soporte <ArrowRight size={14} /></button></div>
           <button className="nav-link settings-link" onClick={() => setActive("Administración")}><SlidersHorizontal size={18} /><span>Administración</span></button>
-          <div className="profile-row"><div className="profile-avatar">AM</div><div className="profile-copy"><strong>Andrea Martínez</strong><span>Agente de seguros</span></div><button aria-label="Cerrar sesión" title="Cerrar sesión" className="profile-logout" onClick={logOut}><LogOut size={17} /></button></div>
+          <div className="profile-row"><div className="profile-avatar">{initials}</div><div className="profile-copy"><strong title={email}>{displayName}</strong><span>Agente de seguros</span></div><button aria-label="Cerrar sesión" title="Cerrar sesión" className="profile-logout" onClick={logOut}><LogOut size={17} /></button></div>
         </div>
       </aside>
       {mobileMenu && <button className="sidebar-overlay" aria-label="Cerrar menú" onClick={() => setMobileMenu(false)} />}
@@ -254,16 +262,16 @@ export function AmsApp() {
             <label className="global-search"><Search size={17} /><input aria-label="Buscar en el sistema" placeholder="Buscar en todo..." value={search} onChange={(event) => setSearch(event.target.value)} /><kbd>⌘ K</kbd></label>
             <button className="icon-button notification-button" aria-label="Notificaciones" onClick={() => setToast("No tienes notificaciones nuevas.")}><Bell size={19} /><span /></button>
             <div className="topbar-divider" />
-            <div className="topbar-user"><div className="profile-avatar">AM</div><ChevronDown size={15} /></div>
+            <div className="topbar-user" title={email}><div className="profile-avatar">{initials}</div><ChevronDown size={15} /></div>
           </div>
         </header>
 
         <div className="page-content" key={agency}>
           <div className="demo-banner"><span className="demo-banner-dot" /><strong>{agencyName.toLocaleUpperCase()} · DEMO</strong><span>Agencias simuladas de acceso público. Usa solo datos ficticios.</span></div>
           {active === "Inicio" ? (
-            <Dashboard onNavigate={setActive} />
+            <Dashboard onNavigate={setActive} firstName={firstName} />
           ) : active === "Asistente IA" ? (
-            <AiAssistant onToast={setToast} />
+            <AiAssistant onToast={setToast} userInitials={initials} />
           ) : (
             <DataModulePage section={active} search={search} setSearch={setSearch} onToast={setToast} />
           )}
@@ -274,7 +282,7 @@ export function AmsApp() {
   );
 }
 
-function Dashboard({ onNavigate }: { onNavigate: (section: string) => void }) {
+function Dashboard({ onNavigate, firstName }: { onNavigate: (section: string) => void; firstName: string }) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [summaryError, setSummaryError] = useState("");
 
@@ -311,7 +319,7 @@ function Dashboard({ onNavigate }: { onNavigate: (section: string) => void }) {
   return (
     <>
       <div className="page-heading dashboard-heading">
-        <div><div className="eyebrow">RESUMEN DE OPERACIONES</div><h1>Buenos días, Andrea <span className="wave">✦</span></h1><p>Registros y pendientes de tu agencia en un solo lugar.</p></div>
+        <div><div className="eyebrow">RESUMEN DE OPERACIONES</div><h1>Buenos días, {firstName} <span className="wave">✦</span></h1><p>Registros y pendientes de tu agencia en un solo lugar.</p></div>
         <button className="primary-button" onClick={() => onNavigate("Contactos")}><Plus size={17} /> Nuevo contacto</button>
       </div>
       <div className="summary-row">

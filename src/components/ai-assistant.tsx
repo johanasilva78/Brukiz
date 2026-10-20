@@ -38,7 +38,7 @@ function displayField(value: unknown) {
   return "";
 }
 
-export function AiAssistant({ onToast }: { onToast: (message: string) => void }) {
+export function AiAssistant({ onToast, userInitials }: { onToast: (message: string) => void; userInitials: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: "assistant",
     content: "Hola, soy el asistente de Brukiz. Puedo consultar registros, preparar cambios y resumir la actividad de tu agencia. ¿Qué necesitas?",
@@ -148,7 +148,7 @@ export function AiAssistant({ onToast }: { onToast: (message: string) => void })
         <div className="ai-messages" aria-live="polite">
           {messages.map((message, index) => (
             <article className={`ai-message ${message.role}`} key={`${index}-${message.content.slice(0, 20)}`}>
-              <div className="ai-message-avatar">{message.role === "assistant" ? <Sparkles size={15} /> : "AM"}</div>
+              <div className="ai-message-avatar">{message.role === "assistant" ? <Sparkles size={15} /> : userInitials}</div>
               <div className="ai-message-body">
                 <p>{message.content}</p>
                 {message.records && message.records.length > 0 && (
