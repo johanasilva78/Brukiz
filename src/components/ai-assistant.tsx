@@ -48,7 +48,9 @@ export function AiAssistant({ onToast }: { onToast: (message: string) => void })
   const [error, setError] = useState("");
   const threadEnd = useRef<HTMLDivElement>(null);
 
-  useEffect(() => threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, busy]);
+  useEffect(() => {
+    threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, busy]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
