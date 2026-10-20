@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Bot, Check, LoaderCircle, Send, ShieldAlert, Sparkles } from "lucide-react";
 import { assistantHistory, readAssistantResponse, type AssistantAction as ProposedAction, type AssistantResponse } from "@/lib/assistant";
+import { demoFetch } from "@/lib/demo-agencies";
 
 type AssistantAction = ProposedAction & {
   status: "pending" | "saved";
@@ -66,7 +67,7 @@ export function AiAssistant({ onToast }: { onToast: (message: string) => void })
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`${apiBaseUrl}/v1/assistant`, {
+      const response = await demoFetch(`${apiBaseUrl}/v1/assistant`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export function AiAssistant({ onToast }: { onToast: (message: string) => void })
     setError("");
     try {
       const url = `${apiBaseUrl}/v1/${action.resource}${action.kind === "update" && action.id ? `/${encodeURIComponent(action.id)}` : ""}`;
-      const response = await fetch(url, {
+      const response = await demoFetch(url, {
         method: action.kind === "create" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(action.data),

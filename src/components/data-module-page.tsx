@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, CircleHelp, FileText, Plus, Search, Trash2, X } from "lucide-react";
 import { ModuleDefinition, ModuleField, modules, userFields } from "@/lib/ams-modules";
+import { demoDataKey as localKey, demoFetch, getDemoAgency } from "@/lib/demo-agencies";
 
 type DataRecord = Record<string, unknown> & {
   id: string;
@@ -27,8 +28,8 @@ const sampleContacts: DataRecord[] = [
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_BRUKIZ_API_URL?.replace(/\/+$/, "");
 
-function localKey(resource: string) {
-  return `brukiz-demo-data:${resource}`;
+function defaultRecords(resource: string): DataRecord[] {
+  return resource === "contacts" && getDemoAgency() === "demo" ? sampleContacts : [];
 }
 
 function displayValue(value: unknown) {
@@ -77,7 +78,7 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
     setError("");
     try {
       if (apiBaseUrl) {
-        const response = await fetch(`${apiBaseUrl}/v1/${resource}`);
+        const response = await demoFetch(`${apiBaseUrl}/v1/${resource}`);
         const result = await response.json();
         if (!response.ok) throw new Error(result.message ?? `La API respondió ${response.status}.`);
         if (!Array.isArray(result)) throw new Error("La API devolvió una respuesta inesperada.");
@@ -89,7 +90,7 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
           if (!Array.isArray(parsed)) throw new Error("Los datos locales guardados no tienen un formato válido.");
           setRecords(parsed as DataRecord[]);
         } else {
-          const initial = resource === "contacts" ? sampleContacts : [];
+          const initial = defaultRecords(resource);
           setRecords(initial);
           window.localStorage.setItem(localKey(resource), JSON.stringify(initial));
         }
@@ -106,7 +107,7 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
     setError("");
     try {
       if (apiBaseUrl) {
-        const response = await fetch(`${apiBaseUrl}/v1/reports`);
+        const response = await demoFetch(`${apiBaseUrl}/v1/reports`);
         const result = await response.json();
         if (!response.ok) throw new Error(result.message ?? `La API respondió ${response.status}.`);
         setReport(result as ReportSummary);
@@ -114,7 +115,7 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
         const counts: Record<string, number> = {};
         for (const module of Object.values(modules)) {
           const stored = window.localStorage.getItem(localKey(module.resource));
-          const rows = stored ? JSON.parse(stored) as DataRecord[] : module.resource === "contacts" ? sampleContacts : [];
+          const rows = stored ? JSON.parse(stored) as DataRecord[] : defaultRecords(module.resource);
           counts[module.resource] = rows.filter((row) => !row.archived).length;
         }
         const users = window.localStorage.getItem(localKey("users"));
@@ -148,7 +149,7 @@ export function DataModulePage({ section, search, setSearch, onToast }: {
     try {
       if (apiBaseUrl) {
         const path = `${apiBaseUrl}/v1/${resource}${item ? `/${encodeURIComponent(item.id)}` : ""}`;
-        const response = await fetch(path, {
+        const response = await demoFetch(path, {
           method,
           headers: { "Content-Type": "application/json" },
           ...(payload ? { body: JSON.stringify(payload) } : {}),
@@ -285,14 +286,14 @@ function RecordModal({ definition, record, saving, onClose, onSave }: {
         for (const resource of new Set(referenceFields.map((field) => field.referenceResource!))) {
           let rows: DataRecord[];
           if (apiBaseUrl) {
-            const response = await fetch(`${apiBaseUrl}/v1/${resource}`);
+            const response = await demoFetch(`${apiBaseUrl}/v1/${resource}`);
             const result = await response.json();
             if (!response.ok) throw new Error(result.message ?? `No se pudieron cargar las opciones (${response.status}).`);
             if (!Array.isArray(result)) throw new Error(`La respuesta para ${resource} no es válida.`);
             rows = result as DataRecord[];
           } else {
             const stored = window.localStorage.getItem(localKey(resource));
-            const parsed: unknown = stored ? JSON.parse(stored) : resource === "contacts" ? sampleContacts : [];
+            const parsed: unknown = stored ? JSON.parse(stored) : defaultRecords(resource);
             if (!Array.isArray(parsed)) throw new Error(`Los datos locales de ${resource} no tienen un formato válido.`);
             rows = parsed as DataRecord[];
           }

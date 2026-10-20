@@ -37,6 +37,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { DataModulePage } from "./data-module-page";
 import { AiAssistant } from "./ai-assistant";
 import { modules } from "@/lib/ams-modules";
+import { demoAgencies, demoDataKey, demoFetch, getDemoAgency, selectDemoAgency, type DemoAgencyId } from "@/lib/demo-agencies";
 
 type Contact = {
   id: string;
@@ -177,8 +178,11 @@ export function AmsApp() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState("");
+  const [agency, setAgency] = useState<DemoAgencyId>("demo");
+  const agencyName = demoAgencies.find((item) => item.id === agency)!.name;
 
   useEffect(() => {
+    setAgency(getDemoAgency());
     const savedSession = window.localStorage.getItem("brukiz-demo-session");
     if (savedSession) {
       setLoggedIn(true);
@@ -210,8 +214,15 @@ export function AmsApp() {
         <div className="sidebar-brand"><Brand compact /><button className="mobile-close" aria-label="Cerrar menú" onClick={() => setMobileMenu(false)}><X size={19} /></button></div>
         <div className="agency-switcher">
           <div className="agency-avatar">F</div>
-          <div className="agency-copy"><strong>Ficohsa Seguros</strong><span>Agencia principal</span></div>
-          <ChevronDown size={16} className="agency-chevron" />
+          <div className="agency-copy"><strong>Ficohsa Seguros</strong>
+            <select aria-label="Agencia de demostración" value={agency} onChange={(event) => {
+              setAgency(selectDemoAgency(event.target.value));
+              setSearch("");
+              setToast("");
+            }}>
+              {demoAgencies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </div>
         </div>
         <nav className="side-nav" aria-label="Navegación principal">
           {menuGroups.map((group) => (
@@ -238,7 +249,7 @@ export function AmsApp() {
       <main className="main-area">
         <header className="topbar">
           <button className="mobile-menu-button" aria-label="Abrir menú" onClick={() => setMobileMenu(true)}><Menu size={21} /></button>
-          <div className="breadcrumbs"><span>Ficohsa Seguros</span><ChevronRight size={15} /><strong>{active}</strong></div>
+          <div className="breadcrumbs"><span>{agencyName}</span><ChevronRight size={15} /><strong>{active}</strong></div>
           <div className="topbar-actions">
             <label className="global-search"><Search size={17} /><input aria-label="Buscar en el sistema" placeholder="Buscar en todo..." value={search} onChange={(event) => setSearch(event.target.value)} /><kbd>⌘ K</kbd></label>
             <button className="icon-button notification-button" aria-label="Notificaciones" onClick={() => setToast("No tienes notificaciones nuevas.")}><Bell size={19} /><span /></button>
@@ -247,8 +258,8 @@ export function AmsApp() {
           </div>
         </header>
 
-        <div className="page-content">
-          <div className="demo-banner"><span className="demo-banner-dot" /><strong>ENTORNO DEMOSTRATIVO</strong><span>Datos de ejemplo; no representan operaciones reales.</span></div>
+        <div className="page-content" key={agency}>
+          <div className="demo-banner"><span className="demo-banner-dot" /><strong>{agencyName.toLocaleUpperCase()} · DEMO</strong><span>Agencias simuladas de acceso público. Usa solo datos ficticios.</span></div>
           {active === "Inicio" ? (
             <Dashboard onNavigate={setActive} />
           ) : active === "Asistente IA" ? (
@@ -272,7 +283,7 @@ function Dashboard({ onNavigate }: { onNavigate: (section: string) => void }) {
       try {
         const apiBaseUrl = process.env.NEXT_PUBLIC_BRUKIZ_API_URL?.replace(/\/+$/, "");
         if (apiBaseUrl) {
-          const response = await fetch(`${apiBaseUrl}/v1/reports`);
+          const response = await demoFetch(`${apiBaseUrl}/v1/reports`);
           const result = await response.json();
           if (!response.ok) throw new Error(result.message ?? `La API respondió ${response.status}.`);
           setCounts(result.counts as Record<string, number>);
@@ -280,12 +291,12 @@ function Dashboard({ onNavigate }: { onNavigate: (section: string) => void }) {
         }
         const next: Record<string, number> = {};
         for (const module of Object.values(modules)) {
-          const stored = window.localStorage.getItem(`brukiz-demo-data:${module.resource}`);
-          const rows: unknown = stored ? JSON.parse(stored) : module.resource === "contacts" ? Array(4).fill(null) : [];
+          const stored = window.localStorage.getItem(demoDataKey(module.resource));
+          const rows: unknown = stored ? JSON.parse(stored) : module.resource === "contacts" && getDemoAgency() === "demo" ? Array(4).fill(null) : [];
           if (!Array.isArray(rows)) throw new Error(`Los datos locales de ${module.resource} no tienen un formato válido.`);
           next[module.resource] = rows.filter((row) => !row || typeof row !== "object" || !(row as { archived?: boolean }).archived).length;
         }
-        const users = window.localStorage.getItem("brukiz-demo-data:users");
+        const users = window.localStorage.getItem(demoDataKey("users"));
         const userRows: unknown = users ? JSON.parse(users) : [];
         if (!Array.isArray(userRows)) throw new Error("Los datos locales de usuarios no tienen un formato válido.");
         next.users = userRows.filter((row) => !row || typeof row !== "object" || !(row as { archived?: boolean }).archived).length;

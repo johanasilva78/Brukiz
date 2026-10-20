@@ -57,6 +57,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .agency-copy, .profile-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .agency-copy strong, .profile-copy strong { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agency-copy span, .profile-copy span { color: var(--muted); font-size: 11px; }
+.agency-copy select { width: 100%; min-height: 26px; border: 1px solid var(--border); border-radius: 4px; padding: 3px; background: #fff; color: var(--text); font: inherit; font-size: 11px; cursor: pointer; }
 .agency-chevron { color: #96a1b1; }
 .side-nav { overflow-y: auto; flex: 1; }
 .nav-group { margin-bottom: 20px; }

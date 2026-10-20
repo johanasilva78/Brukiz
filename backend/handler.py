@@ -17,6 +17,7 @@ CONTACT_TYPES = {"prospecto", "cliente", "asegurado", "beneficiario", "represent
 CONTACT_STATUSES = {"activo", "seguimiento", "nuevo", "inactivo"}
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DEFAULT_CORS_ORIGIN = "https://main.dr86wkdl0o11b.amplifyapp.com"
+DEMO_AGENCIES = {"demo", "demo-norte", "demo-sur"}
 ENTITIES = {
     "contacts": ("CONTACT", {
         "name": ("text", 160, True), "email": ("email", 254, False),
@@ -113,7 +114,7 @@ def response(status_code: int, body: Any = None, origin: str | None = None) -> d
         headers["Vary"] = "Origin"
         if status_code == 204:
             headers["Access-Control-Allow-Methods"] = "GET,POST,PATCH,DELETE,OPTIONS"
-            headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
+            headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-Demo-Agency"
             headers["Access-Control-Max-Age"] = "600"
     return {
         "statusCode": status_code,
@@ -137,7 +138,11 @@ def _tenant_and_actor(event: dict[str, Any]) -> tuple[str, str]:
     tenant_id = claims.get(tenant_claim)
     actor_id = claims.get("sub")
     if os.environ.get("DEMO_MODE", "").lower() == "true":
-        return "demo", "demo-user"
+        headers = {key.lower(): value for key, value in (event.get("headers") or {}).items()}
+        agency = headers.get("x-demo-agency", "demo")
+        if not isinstance(agency, str) or agency not in DEMO_AGENCIES:
+            raise ApiError(400, "Selecciona una agencia de demostración válida.", "Bad Request")
+        return agency, "demo-user"
     if not tenant_id or not actor_id:
         raise ApiError(403, "La sesión no contiene un tenant y usuario válidos.", "Forbidden")
     return str(tenant_id), str(actor_id)

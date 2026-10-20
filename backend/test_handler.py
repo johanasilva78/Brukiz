@@ -169,6 +169,55 @@ class LambdaHandlerTests(unittest.TestCase):
         self.assertEqual(audit["tenantId"]["S"], "agency-42")
         self.assertEqual(audit["actorId"]["S"], "user-7")
 
+    def test_demo_agencies_separate_reads_writes_reports_and_assistant(self):
+        def demo_event(agency, **kwargs):
+            event = self.event(**kwargs)
+            event["headers"]["X-Demo-Agency"] = agency
+            return event
+
+        with patch.dict(os.environ, {"DEMO_MODE": "true"}):
+            created = lambda_handler(demo_event("demo-norte", method="POST", body={
+                "name": "Contacto del Norte", "type": "prospecto",
+            }), None)
+            record = json.loads(created["body"])
+            self.assertEqual(record["tenantId"], "demo-norte")
+            self.assertEqual(self.table.transactions[0][1]["Put"]["Item"]["tenantId"]["S"], "demo-norte")
+            for agency, expected in (("demo-norte", 1), ("demo-sur", 0), ("demo", 0)):
+                listed = lambda_handler(demo_event(agency), None)
+                self.assertEqual(len(json.loads(listed["body"])), expected)
+                report = lambda_handler(demo_event(agency, path="/prod/v1/reports"), None)
+                self.assertEqual(json.loads(report["body"])["counts"]["contacts"], expected)
+            for method in ("GET", "PATCH", "DELETE"):
+                result = lambda_handler(demo_event("demo-sur", method=method,
+                    path=f"/prod/v1/contacts/{record['id']}",
+                    body={"name": "Cambio ajeno"} if method == "PATCH" else None,
+                ), None)
+                self.assertEqual(result["statusCode"], 404)
+            self.model_response = {"output": {"message": {"content": [{"toolUse": {
+                "name": "list_records", "input": {"entity": "contacts"},
+            }}]}}}
+            for agency, expected in (("demo-norte", 1), ("demo-sur", 0)):
+                event = self.assistant_event("Lista los contactos")
+                event["headers"]["x-demo-agency"] = agency
+                result = lambda_handler(event, None)
+                self.assertEqual(len(json.loads(result["body"])["records"]), expected)
+            self.assertEqual(len(self.table.transactions), 1)
+
+    def test_demo_rejects_unknown_agencies(self):
+        with patch.dict(os.environ, {"DEMO_MODE": "true"}):
+            event = self.event()
+            event["headers"]["x-demo-agency"] = "agency-42"
+            self.assertEqual(lambda_handler(event, None)["statusCode"], 400)
+
+    def test_authenticated_mode_ignores_demo_agency_header(self):
+        event = self.event(method="POST", claims={"sub": "user-7", "custom:tenantId": "agency-42"},
+            body={"name": "Contacto autenticado", "type": "cliente"})
+        event["headers"]["x-demo-agency"] = "demo-sur"
+        result = lambda_handler(event, None)
+        self.assertEqual(json.loads(result["body"])["tenantId"], "agency-42")
+        event["requestContext"]["authorizer"]["claims"] = {}
+        self.assertEqual(lambda_handler(event, None)["statusCode"], 403)
+
     def test_assistant_returns_text_from_bedrock(self):
         result = lambda_handler(self.assistant_event("Hola"), None)
         self.assertEqual(result["statusCode"], 200)
