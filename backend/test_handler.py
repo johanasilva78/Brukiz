@@ -316,6 +316,7 @@ class LambdaHandlerTests(unittest.TestCase):
         documented = json.loads(response["body"])["paths"]
         for resource in ("contacts", "insurers", "products", "opportunities", "quotes", "policies", "renewals", "claims", "tasks", "documents", "agencies", "users"):
             self.assertIn(f"/v1/{resource}", documented)
+        self.assertIn("/v1/assistant", documented)
 
     def test_lists_only_contacts_in_authenticated_tenant(self):
         for tenant_id, name in (("agency-42", "Contacto propio"), ("agency-99", "Contacto ajeno")):

@@ -8,7 +8,7 @@ Sistema de gestión de agencias de seguros para Ficohsa Seguros. El repositorio 
 
 - **Web:** Next.js App Router, React, TypeScript y diseño responsive con exportación estática para la app de Amplify existente.
 - **Hosting:** AWS Amplify Hosting.
-- **API:** Función AWS Lambda independiente escrita en Python, detrás de API Gateway REST.
+- **API:** Función AWS Lambda independiente escrita en Python, detrás de API Gateway HTTP.
 - **Autenticación:** Amazon Cognito User Pool creado y administrado desde la consola AWS; API Gateway protege las rutas con el User Pool.
 - **Persistencia:** Amazon DynamoDB mediante `boto3`, el SDK oficial de AWS para Python. DynamoDB no es compatible con Prisma ni requiere un ORM relacional.
 - **Aislamiento:** tabla con clave compuesta `tenantId` (partition key) + `entityKey` (sort key). El backend obtiene el tenant exclusivamente del claim verificado `custom:tenantId` del token Cognito; nunca acepta el tenant enviado por el cliente.

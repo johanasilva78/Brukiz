@@ -594,6 +594,7 @@ def _dispatch(event: dict[str, Any]) -> tuple[int, Any]:
                 **{f"/v1/{resource}": {"get": {}, "post": {}} for resource in ENTITIES},
                 **{f"/v1/{resource}/{{id}}": {"get": {}, "patch": {}, "delete": {}} for resource in ENTITIES},
                 "/v1/reports": {"get": {}},
+                "/v1/assistant": {"post": {}},
             },
         }
     if not path.startswith("/v1/"):
