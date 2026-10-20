@@ -471,11 +471,17 @@ def _assistant_messages(data: dict[str, Any]) -> list[dict[str, Any]]:
             or len(message["content"]) > 1000
         ):
             raise ApiError(400, "Cada mensaje debe tener un rol válido y hasta 1000 caracteres.", "Bad Request")
+        # The UI greeting and a truncated assistant turn are not user context.
+        if not normalized and message["role"] == "assistant":
+            continue
+        if normalized and normalized[-1]["role"] == message["role"]:
+            normalized[-1]["content"].append({"text": message["content"].strip()})
+            continue
         normalized.append({
             "role": message["role"],
             "content": [{"text": message["content"].strip()}],
         })
-    if normalized[-1]["role"] != "user":
+    if not normalized or normalized[-1]["role"] != "user":
         raise ApiError(400, "El último mensaje debe ser del usuario.", "Bad Request")
     return normalized
 

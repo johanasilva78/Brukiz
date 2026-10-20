@@ -2,12 +2,9 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Bot, Check, LoaderCircle, Send, ShieldAlert, Sparkles } from "lucide-react";
+import { assistantHistory, readAssistantResponse, type AssistantAction as ProposedAction, type AssistantResponse } from "@/lib/assistant";
 
-type AssistantAction = {
-  kind: "create" | "update";
-  resource: string;
-  id?: string;
-  data: Record<string, unknown>;
+type AssistantAction = ProposedAction & {
   status: "pending" | "saved";
 };
 
@@ -15,14 +12,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   action?: AssistantAction;
-  records?: { id: string; name: string; status?: string }[];
-};
-
-type AssistantResponse = {
-  reply: string;
-  action?: Omit<AssistantAction, "status">;
-  records?: ChatMessage["records"];
-  saved?: boolean;
+  records?: AssistantResponse["records"];
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_BRUKIZ_API_URL?.replace(/\/+$/, "");
@@ -79,11 +69,10 @@ export function AiAssistant({ onToast }: { onToast: (message: string) => void })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
-          messages: nextMessages.slice(-6).map(({ role, content }) => ({ role, content })),
+          messages: assistantHistory(nextMessages),
         }),
       });
-      const result = await response.json() as AssistantResponse & { message?: string };
-      if (!response.ok) throw new Error(result.message ?? `La API respondió ${response.status}.`);
+      const result = await readAssistantResponse(response);
       const assistantMessage: ChatMessage = {
         role: "assistant",
         content: result.reply,

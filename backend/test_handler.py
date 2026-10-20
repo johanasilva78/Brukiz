@@ -6,7 +6,31 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
-from handler import lambda_handler
+from handler import ApiError, _assistant_messages, lambda_handler
+
+
+class AssistantHistoryTests(unittest.TestCase):
+    def test_removes_ui_greeting_and_truncated_assistant_turn(self):
+        messages = _assistant_messages({"messages": [
+            {"role": "assistant", "content": "Hola, soy el asistente de Brukiz."},
+            {"role": "user", "content": "Lista contactos"},
+        ]})
+        self.assertEqual(messages, [{"role": "user", "content": [{"text": "Lista contactos"}]}])
+
+    def test_retry_after_failure_merges_consecutive_user_turns(self):
+        messages = _assistant_messages({"messages": [
+            {"role": "user", "content": "Lista contactos"},
+            {"role": "user", "content": "Intenta de nuevo"},
+        ]})
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["content"], [{"text": "Lista contactos"}, {"text": "Intenta de nuevo"}])
+
+    def test_requires_a_final_user_message(self):
+        for history in ([{"role": "assistant", "content": "Hola"}], [
+            {"role": "user", "content": "Hola"}, {"role": "assistant", "content": "Hola"},
+        ]):
+            with self.assertRaises(ApiError):
+                _assistant_messages({"messages": history})
 
 
 class FakeTable:

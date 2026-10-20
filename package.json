@@ -8,6 +8,7 @@
     "build:lambda": "python3 backend/build_lambda.py",
     "start": "next start",
     "test": "python3 -m unittest discover -s backend -p 'test_*.py'",
+    "test:ui": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
